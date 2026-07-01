@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inkwell — A Word Guessing Game</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ========== Inkwell — ink & paper theme ========== */
+
+:root {
+  --ink-navy: #1B1F2B;
+  --ink-navy-deep: #14161F;
+  --parchment: #F2E9D8;
+  --parchment-dim: #D8CDB6;
+  --moss: #5B7553;
+  --moss-bright: #6F8E63;
+  --gold: #C99A3E;
+  --gold-bright: #D9AE56;
+  --charcoal: #3A3F4B;
+  --charcoal-light: #4D5260;
+  --crimson: #A5403F;
+  --crimson-bright: #BD4F4E;
+  --paper-line: rgba(242, 233, 216, 0.12);
+
+  --font-display: 'Special Elite', 'Courier New', monospace;
+  --font-body: 'Inter', system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--ink-navy);
+  color: var(--parchment);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* Subtle paper-grain / vignette texture over the ink background */
+.paper-grain {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    radial-gradient(circle at 20% 20%, rgba(242,233,216,0.035), transparent 40%),
+    radial-gradient(circle at 80% 70%, rgba(242,233,216,0.03), transparent 45%),
+    repeating-linear-gradient(0deg, rgba(242,233,216,0.015) 0px, rgba(242,233,216,0.015) 1px, transparent 1px, transparent 3px);
+  mix-blend-mode: overlay;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
+}
+
+/* ---------- Top bar ---------- */
+.topbar {
+  width: 100%;
+  max-width: 520px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 16px 10px;
+  border-bottom: 1px solid var(--paper-line);
+  position: relative;
+  z-index: 1;
+}
+
+.logo {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  letter-spacing: 0.12em;
+  margin: 0;
+  color: var(--parchment);
+}
+.logo span { color: var(--gold-bright); }
+
+.icon-btn {
+  background: transparent;
+  border: 1px solid var(--paper-line);
+  color: var(--parchment);
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  font-size: 1rem;
+  font-family: var(--font-display);
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s, border-color 0.15s;
+}
+.icon-btn:hover { background: rgba(242,233,216,0.08); border-color: var(--gold-bright); }
+.icon-btn:active { transform: scale(0.92); }
+.icon-btn:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 2px; }
+
+/* ---------- Main layout ---------- */
+main {
+  flex: 1;
+  width: 100%;
+  max-width: 520px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px 12px 10px;
+  position: relative;
+  z-index: 1;
+}
+
+/* ---------- Board ---------- */
+.board {
+  display: grid;
+  grid-template-rows: repeat(6, 1fr);
+  gap: 7px;
+  width: 100%;
+  max-width: 330px;
+  margin: 6px auto 0;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 7px;
+}
+
+.tile {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  color: var(--parchment);
+  background: transparent;
+  border: 2px solid var(--charcoal-light);
+  border-radius: 3px;
+  text-transform: uppercase;
+  user-select: none;
+  transition: transform 0.12s ease;
+}
+
+.tile.filled {
+  border-color: var(--parchment-dim);
+  animation: pop 0.1s ease;
+}
+
+@keyframes pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.07); }
+  100% { transform: scale(1); }
+}
+
+/* "Typewriter stamp" reveal animation */
+.tile.reveal {
+  animation: stamp 0.35s ease forwards;
+}
+@keyframes stamp {
+  0%   { transform: translateY(-6px) scale(1.0); }
+  55%  { transform: translateY(2px) scale(0.97); }
+  100% { transform: translateY(0) scale(1); }
+}
+
+.tile.correct { background: var(--moss); border-color: var(--moss); color: var(--parchment); }
+.tile.present { background: var(--gold); border-color: var(--gold); color: var(--ink-navy-deep); }
+.tile.absent  { background: var(--charcoal); border-color: var(--charcoal); color: var(--parchment-dim); }
+
+.row.shake { animation: shake 0.4s ease; }
+@keyframes shake {
+  10%, 90% { transform: translateX(-1px); }
+  20%, 80% { transform: translateX(2px); }
+  30%, 50%, 70% { transform: translateX(-4px); }
+  40%, 60% { transform: translateX(4px); }
+}
+
+.row.win .tile { animation: bounce 0.5s ease; }
+.row.win .tile:nth-child(1) { animation-delay: 0.00s; }
+.row.win .tile:nth-child(2) { animation-delay: 0.06s; }
+.row.win .tile:nth-child(3) { animation-delay: 0.12s; }
+.row.win .tile:nth-child(4) { animation-delay: 0.18s; }
+.row.win .tile:nth-child(5) { animation-delay: 0.24s; }
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  35% { transform: translateY(-10px); }
+}
+
+/* ---------- Toast ---------- */
+.toast {
+  min-height: 20px;
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  color: var(--ink-navy-deep);
+  background: var(--parchment);
+  padding: 8px 16px;
+  border-radius: 4px;
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: opacity 0.2s, transform 0.2s;
+  pointer-events: none;
+}
+.toast.show { opacity: 1; transform: translateY(0); }
+
+/* ---------- Keyboard ---------- */
+.keyboard {
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: auto;
+}
+.kb-row { display: flex; justify-content: center; gap: 5px; }
+
+.key {
+  flex: 1;
+  max-width: 42px;
+  min-width: 26px;
+  height: 48px;
+  border: none;
+  border-radius: 4px;
+  background: var(--charcoal-light);
+  color: var(--parchment);
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.08s;
+}
+.key:hover { background: #5b6072; }
+.key:active { transform: scale(0.93); }
+.key.wide { max-width: 62px; font-size: 0.65rem; }
+
+.key.correct { background: var(--moss); }
+.key.present { background: var(--gold); color: var(--ink-navy-deep); }
+.key.absent  { background: var(--ink-navy-deep); color: var(--charcoal-light); }
+
+/* ---------- Footer ---------- */
+.foot-note {
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  color: var(--parchment-dim);
+  opacity: 0.6;
+  padding: 10px 0 18px;
+  letter-spacing: 0.03em;
+  position: relative;
+  z-index: 1;
+}
+
+/* ---------- Modals ---------- */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 11, 16, 0.72);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 16px;
+}
+.modal-backdrop.show { display: flex; }
+
+.modal {
+  background: var(--ink-navy);
+  border: 1px solid var(--paper-line);
+  border-radius: 8px;
+  max-width: 420px;
+  width: 100%;
+  max-height: 86vh;
+  overflow-y: auto;
+  padding: 28px 26px 26px;
+  position: relative;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+
+.modal-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  background: transparent;
+  border: none;
+  color: var(--parchment-dim);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.modal-close:hover { color: var(--gold-bright); }
+
+.modal-title {
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  color: var(--gold-bright);
+  margin: 0 0 12px;
+  letter-spacing: 0.02em;
+}
+
+.modal-lede {
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: var(--parchment);
+  margin: 0 0 18px;
+}
+
+.modal-section-label {
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  color: var(--parchment-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 18px 0 8px;
+}
+
+.example-row {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  max-width: 220px;
+  margin-bottom: 6px;
+}
+.tile.demo {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  border: 2px solid var(--charcoal-light);
+  border-radius: 3px;
+  color: var(--parchment);
+}
+.tile.demo.correct { background: var(--moss); border-color: var(--moss); }
+.tile.demo.present { background: var(--gold); border-color: var(--gold); color: var(--ink-navy-deep); }
+.tile.demo.absent { background: var(--charcoal); border-color: var(--charcoal); }
+
+.example-caption {
+  font-size: 0.85rem;
+  color: var(--parchment-dim);
+  margin: 0 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+.correct-dot { background: var(--moss); }
+.present-dot { background: var(--gold); }
+.absent-dot { background: var(--charcoal-light); }
+
+.rules-list {
+  margin: 0 0 20px;
+  padding-left: 20px;
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: var(--parchment);
+}
+.rules-list li { margin-bottom: 6px; }
+kbd {
+  background: var(--charcoal-light);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-family: var(--font-body);
+  font-size: 0.82em;
+}
+
+.primary-btn {
+  width: 100%;
+  padding: 13px;
+  border: none;
+  border-radius: 5px;
+  background: var(--gold);
+  color: var(--ink-navy-deep);
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.08s;
+}
+.primary-btn:hover { background: var(--gold-bright); }
+.primary-btn:active { transform: scale(0.98); }
+
+/* Stats modal */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 22px;
+}
+.stat-box { text-align: center; }
+.stat-num {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  color: var(--parchment);
+}
+.stat-label {
+  display: block;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--parchment-dim);
+  margin-top: 4px;
+}
+
+.dist-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 22px;
+}
+.dist-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+  font-family: var(--font-body);
+}
+.dist-row .dist-label { width: 14px; color: var(--parchment-dim); flex-shrink: 0; }
+.dist-bar-track { flex: 1; background: var(--charcoal); border-radius: 3px; overflow: hidden; height: 22px; }
+.dist-bar-fill {
+  height: 100%;
+  background: var(--charcoal-light);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 6px;
+  color: var(--parchment);
+  font-size: 0.75rem;
+  min-width: 22px;
+  transition: width 0.4s ease;
+}
+.dist-bar-fill.won { background: var(--moss); }
+
+/* ---------- Responsive ---------- */
+@media (max-width: 380px) {
+  .tile { font-size: 1.3rem; }
+  .key { height: 44px; font-size: 0.7rem; }
+  .logo { font-size: 1.25rem; }
+}
+
+  </style>
+</head>
+<body>
+
+<div class="paper-grain"></div>
+
+<header class="topbar">
+  <button class="icon-btn" id="infoBtn" aria-label="How to play" title="How to play">?</button>
+  <h1 class="logo">INK<span>WELL</span></h1>
+  <button class="icon-btn" id="statsBtn" aria-label="Statistics" title="Statistics">&#9776;</button>
+</header>
+
+<main>
+  <div id="board" class="board" aria-label="Guess grid"></div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <div id="keyboard" class="keyboard" aria-label="Keyboard"></div>
+</main>
+
+<footer class="foot-note">six taps to find the word. every press leaves a mark.</footer>
+
+<!-- INFO / HOW TO PLAY MODAL -->
+<div class="modal-backdrop" id="infoModal">
+  <div class="modal">
+    <button class="modal-close" data-close="infoModal" aria-label="Close">&times;</button>
+    <h2 class="modal-title">How to Play</h2>
+    <p class="modal-lede">Guess the hidden five-letter word in six tries. Each guess must be a real word — press <strong>Enter</strong> to submit it.</p>
+
+    <p class="modal-section-label">After each guess, every letter is stamped a colour:</p>
+
+    <div class="example-row">
+      <div class="tile demo correct">I</div>
+      <div class="tile demo">N</div>
+      <div class="tile demo">K</div>
+      <div class="tile demo">L</div>
+      <div class="tile demo">Y</div>
+    </div>
+    <p class="example-caption"><span class="dot correct-dot"></span><strong>Moss green</strong> — the letter is in the word, and in the right spot.</p>
+
+    <div class="example-row">
+      <div class="tile demo">P</div>
+      <div class="tile demo present">A</div>
+      <div class="tile demo">P</div>
+      <div class="tile demo">E</div>
+      <div class="tile demo">R</div>
+    </div>
+    <p class="example-caption"><span class="dot present-dot"></span><strong>Dusty gold</strong> — the letter is in the word, but in a different spot.</p>
+
+    <div class="example-row">
+      <div class="tile demo">Q</div>
+      <div class="tile demo">U</div>
+      <div class="tile demo">I</div>
+      <div class="tile demo">L</div>
+      <div class="tile demo absent">L</div>
+    </div>
+    <p class="example-caption"><span class="dot absent-dot"></span><strong>Charcoal</strong> — the letter isn't in the word at all.</p>
+
+    <p class="modal-section-label">Rules at a glance</p>
+    <ul class="rules-list">
+      <li>One secret word, five letters, six guesses.</li>
+      <li>Every guess must be a valid English word.</li>
+      <li>Letters can repeat — read colours carefully when they do.</li>
+      <li>Use the on-screen keys or your physical keyboard. <kbd>Backspace</kbd> deletes, <kbd>Enter</kbd> submits.</li>
+      <li>Your wins, streak, and guess distribution are saved on this device.</li>
+    </ul>
+
+    <button class="primary-btn" data-close="infoModal">Start writing</button>
+  </div>
+</div>
+
+<!-- STATS MODAL -->
+<div class="modal-backdrop" id="statsModal">
+  <div class="modal">
+    <button class="modal-close" data-close="statsModal" aria-label="Close">&times;</button>
+    <h2 class="modal-title">Your Ledger</h2>
+
+    <div class="stats-grid">
+      <div class="stat-box">
+        <span class="stat-num" id="statPlayed">0</span>
+        <span class="stat-label">Played</span>
+      </div>
+      <div class="stat-box">
+        <span class="stat-num" id="statWinPct">0</span>
+        <span class="stat-label">Win %</span>
+      </div>
+      <div class="stat-box">
+        <span class="stat-num" id="statStreak">0</span>
+        <span class="stat-label">Streak</span>
+      </div>
+      <div class="stat-box">
+        <span class="stat-num" id="statMaxStreak">0</span>
+        <span class="stat-label">Best Streak</span>
+      </div>
+    </div>
+
+    <p class="modal-section-label">Guess distribution</p>
+    <div class="dist-chart" id="distChart"></div>
+
+    <button class="primary-btn" id="nextWordBtn" data-close="statsModal">Next word</button>
+  </div>
+</div>
+
+<!-- END OF GAME MODAL -->
+<div class="modal-backdrop" id="resultModal">
+  <div class="modal">
+    <button class="modal-close" data-close="resultModal" aria-label="Close">&times;</button>
+    <h2 class="modal-title" id="resultTitle">Inked it!</h2>
+    <p class="modal-lede" id="resultSub">The word was <strong id="resultWord">—</strong></p>
+    <button class="primary-btn" id="playAgainBtn">Try another word</button>
+  </div>
+</div>
+
+<script>
+// words.js — word data for Inkwell
+// ANSWERS: words the game can pick as the secret word (common, recognizable)
+// VALID_GUESSES: superset of words accepted as guesses (includes ANSWERS + more)
+
+const ANSWERS = [
+  "ABOUT","ABOVE","ACTOR","ADULT","AFTER","AGAIN","AGENT","ALARM","ALBUM","ALERT",
+  "ALIKE","ALIVE","ALLOW","ALONE","ALONG","ALTER","AMONG","ANGLE","ANGRY","APPLE",
+  "APPLY","ARENA","ARGUE","ARISE","ARRAY","ASIDE","ASSET","AUDIO","AVOID","AWAKE",
+  "AWARD","BADGE","BAKER","BASIC","BASIS","BEACH","BEGIN","BEING","BELOW","BENCH",
+  "BIRTH","BLACK","BLADE","BLAME","BLANK","BLAST","BLEND","BLESS","BLIND","BLOCK",
+  "BLOOD","BOARD","BOOST","BOUND","BRAIN","BRAND","BRAVE","BREAD","BREAK","BRICK",
+  "BRIDE","BRIEF","BRING","BROAD","BROKE","BROWN","BRUSH","BUILD","BUNCH","CABIN",
+  "CABLE","CANDY","CARGO","CARRY","CATCH","CAUSE","CHAIN","CHAIR","CHALK","CHAOS",
+  "CHARM","CHART","CHASE","CHEAP","CHECK","CHESS","CHEST","CHIEF","CHILD","CHORD",
+  "CIVIL","CLAIM","CLASS","CLEAN","CLEAR","CLICK","CLIFF","CLIMB","CLOCK","CLOSE",
+  "CLOTH","CLOUD","COACH","COAST","COLOR","COUCH","COULD","COUNT","COURT","COVER",
+  "CRACK","CRAFT","CRANE","CRASH","CRAZY","CREAM","CRIME","CRISP","CROSS","CROWD",
+  "CROWN","CRUEL","CRUSH","CURVE","DAILY","DANCE","DEPTH","DOUBT","DOZEN","DRAFT",
+  "DRAMA","DRANK","DRAWN","DREAM","DRESS","DRIED","DRIVE","DROVE","DRUNK","EAGER",
+  "EARLY","EARTH","EIGHT","ELBOW","ELDER","ELITE","EMPTY","ENJOY","ENTER","ENTRY",
+  "EQUAL","ERROR","EVENT","EVERY","EXACT","EXIST","EXTRA","FAITH","FALSE","FAULT",
+  "FENCE","FIELD","FIGHT","FINAL","FIRST","FIXED","FLAME","FLASH","FLEET","FLESH",
+  "FLOAT","FLOOD","FLOOR","FLOUR","FLUID","FOCUS","FORCE","FORTH","FOUND","FRAME",
+  "FRANK","FRAUD","FRESH","FRONT","FROST","FRUIT","FUNNY","GHOST","GIANT","GIVEN",
+  "GLASS","GLOBE","GLORY","GOOSE","GRACE","GRADE","GRAIN","GRAND","GRANT","GRAPE",
+  "GRASP","GRASS","GREAT","GREEN","GRIEF","GROUP","GROWN","GUARD","GUESS","GUEST",
+  "GUIDE","HAPPY","HARSH","HEART","HEAVY","HOBBY","HONEY","HONOR","HORSE","HOTEL",
+  "HOUSE","HUMAN","HUMOR","IDEAL","IMAGE","INDEX","INNER","INPUT","ISSUE","IVORY",
+  "JOINT","JUDGE","JUICE","KNIFE","KNOCK","KNOWN","LABEL","LARGE","LASER","LATER",
+  "LAUGH","LAYER","LEARN","LEAST","LEAVE","LEGAL","LEMON","LEVEL","LIGHT","LIMIT",
+  "LINEN","LIVER","LODGE","LOGIC","LOOSE","LOWER","LOYAL","LUCKY","LUNCH","MAGIC",
+  "MAJOR","MAKER","MARCH","MATCH","MAYOR","MEDAL","MERIT","METAL","MIGHT","MINOR",
+  "MIXED","MODEL","MONEY","MONTH","MORAL","MOTOR","MOUNT","MOUSE","MOUTH","MOVIE",
+  "MUSIC","NAIVE","NAKED","NERVE","NEVER","NIGHT","NOBLE","NOISE","NORTH","NOVEL",
+  "NURSE","OCEAN","OFFER","OFTEN","ORDER","OTHER","OUGHT","OUTER","OWNER","PAINT",
+  "PANEL","PAPER","PARTY","PEACE","PHASE","PHOTO","PIANO","PIECE","PILOT","PITCH",
+  "PIZZA","PLACE","PLAIN","PLANE","PLANT","PLATE","POINT","POUND","POWER","PRESS",
+  "PRICE","PRIDE","PRIME","PRINT","PRIOR","PRIZE","PROOF","PROUD","PROVE","QUEEN",
+  "QUICK","QUIET","QUITE","RADIO","RAISE","RANGE","RAPID","RATIO","REACH","REALM",
+  "REBEL","REFER","RELAX","REPLY","RIDGE","RIGHT","RIVAL","RIVER","ROBOT","ROUGH",
+  "ROUND","ROUTE","ROYAL","RURAL","SALAD","SAUCE","SCALE","SCENE","SCOPE","SCORE",
+  "SCOUT","SENSE","SERVE","SEVEN","SHADE","SHAKE","SHALL","SHAPE","SHARE","SHARK",
+  "SHARP","SHEEP","SHEET","SHELF","SHELL","SHIFT","SHINE","SHIRT","SHOCK","SHORE",
+  "SHORT","SHOUT","SIGHT","SILLY","SINCE","SIXTH","SKILL","SLEEP","SLICE","SLIDE",
+  "SLOPE","SMALL","SMART","SMILE","SMOKE","SNAKE","SOLID","SOLVE","SORRY","SOUND",
+  "SOUTH","SPACE","SPARE","SPEAK","SPEED","SPELL","SPEND","SPENT","SPICE","SPLIT",
+  "SPOKE","SPORT","SQUAD","STACK","STAFF","STAGE","STAIN","STAIR","STAKE","STAND",
+  "STARE","START","STATE","STEAM","STEEL","STEEP","STEER","STICK","STIFF","STILL",
+  "STOCK","STONE","STORE","STORM","STORY","STOVE","STUDY","STUFF","STYLE","SUGAR",
+  "SUPER","SWEET","SWIFT","SWING","TABLE","TASTE","TEACH","THANK","THEME","THERE",
+  "THICK","THING","THINK","THIRD","THOSE","THREE","THROW","TIGHT","TIMER","TITLE",
+  "TODAY","TOPIC","TOTAL","TOUCH","TOUGH","TOWER","TRACE","TRACK","TRADE","TRAIN",
+  "TREAT","TREND","TRIAL","TRIBE","TRICK","TROOP","TRUCK","TRULY","TRUST","TRUTH",
+  "TWICE","UNCLE","UNDER","UNION","UNITY","UNTIL","UPPER","URBAN","USAGE","USUAL",
+  "VALID","VALUE","VAPOR","VIDEO","VIRUS","VISIT","VITAL","VOCAL","VOICE","WASTE",
+  "WATCH","WATER","WEIGH","WHEAT","WHEEL","WHERE","WHICH","WHILE","WHITE","WHOLE",
+  "WOMAN","WORLD","WORRY","WORTH","WOULD","WOUND","WRIST","WRITE","WRONG","YIELD",
+  "YOUNG","YOUTH"
+];
+
+// Extra accepted guesses (less common, but still valid words) — merged with ANSWERS at runtime
+const EXTRA_VALID = [
+  "ABBEY","ABYSS","ACUTE","ADAPT","ADOBE","AGILE","ALOFT","ALOHA","AMPLE","ANNEX",
+  "AORTA","APRON","ASHEN","ATLAS","AXION","BASIL","BAYOU","BERRY","BIDET","BLOOM",
+  "BOGUS","BRINY","BURLY","CADET","CAIRN","CANOE","CHIMP","CHURN","CLASP","COBRA",
+  "COMET","COVEN","CRYPT","CURIO","DERBY","DITTO","DOWRY","DROOP","ELOPE","EMBER",
+  "ENVOY","EPOCH","ETHIC","FABLE","FETCH","FJORD","FLICK","FLINT","FROND",
+  "GAUZE","GIDDY","GLAZE","GNOME","GOUGE","GRIME","GULCH","HEDGE","HUMID","HUTCH",
+  "IDIOM","INERT","JOLLY","JUMBO","KAYAK","KIOSK","LATTE","LILAC","LOTUS","LURID",
+  "MANGO","MIRTH","MOSSY","MULCH","NICHE","NOMAD","NUDGE","OASIS","ODDLY","OPERA",
+  "OXIDE","PETAL","PIXIE","PLUMB","POUCH","PRISM","PROXY","PUDGY","QUARK",
+  "QUILT","QUIRK","RAJAH","RELIC","RHYME","RUSTY","SCOLD","SCRAP","SHARD","SHRUB",
+  "SIEGE","SLOTH","SMOKY","SNARL","SOOTY","SPRIG","STOMP","SWAMP","TANGO",
+  "TEPID","THORN","TONIC","TRYST","TUNIC","TWEAK","UMBER","VENOM","VIVID","WALTZ",
+  "WHISK","WOOZY","WORMY","YODEL","ZESTY"
+];
+
+const VALID_GUESSES = Array.from(new Set([...ANSWERS, ...EXTRA_VALID]));
+
+
+// script.js — Inkwell game logic
+
+const ROWS = 6;
+const WORD_LEN = 5;
+const STORAGE_KEY = "inkwell_stats_v1";
+
+const KB_ROWS = [
+  ["Q","W","E","R","T","Y","U","I","O","P"],
+  ["A","S","D","F","G","H","J","K","L"],
+  ["ENTER","Z","X","C","V","B","N","M","BACK"]
+];
+
+let answer = "";
+let currentRow = 0;
+let currentGuess = "";
+let guesses = [];
+let gameOver = false;
+let keyStates = {}; // letter -> 'correct' | 'present' | 'absent'
+
+const boardEl = document.getElementById("board");
+const keyboardEl = document.getElementById("keyboard");
+const toastEl = document.getElementById("toast");
+
+/* ---------- Setup ---------- */
+
+function pickAnswer() {
+  return ANSWERS[Math.floor(Math.random() * ANSWERS.length)];
+}
+
+function buildBoard() {
+  boardEl.innerHTML = "";
+  for (let r = 0; r < ROWS; r++) {
+    const row = document.createElement("div");
+    row.className = "row";
+    row.id = `row-${r}`;
+    for (let c = 0; c < WORD_LEN; c++) {
+      const tile = document.createElement("div");
+      tile.className = "tile";
+      tile.id = `tile-${r}-${c}`;
+      row.appendChild(tile);
+    }
+    boardEl.appendChild(row);
+  }
+}
+
+function buildKeyboard() {
+  keyboardEl.innerHTML = "";
+  KB_ROWS.forEach(rowKeys => {
+    const row = document.createElement("div");
+    row.className = "kb-row";
+    rowKeys.forEach(k => {
+      const btn = document.createElement("button");
+      btn.className = "key" + (k === "ENTER" || k === "BACK" ? " wide" : "");
+      btn.id = `key-${k}`;
+      btn.textContent = k === "BACK" ? "⌫" : (k === "ENTER" ? "Enter" : k);
+      btn.addEventListener("click", () => handleKey(k));
+      row.appendChild(btn);
+    });
+    keyboardEl.appendChild(row);
+  });
+}
+
+function newGame() {
+  answer = pickAnswer();
+  currentRow = 0;
+  currentGuess = "";
+  guesses = [];
+  gameOver = false;
+  keyStates = {};
+  buildBoard();
+  buildKeyboard();
+}
+
+/* ---------- Input handling ---------- */
+
+function handleKey(key) {
+  if (gameOver) return;
+
+  if (key === "ENTER") {
+    submitGuess();
+  } else if (key === "BACK") {
+    currentGuess = currentGuess.slice(0, -1);
+    renderCurrentRow();
+  } else if (/^[A-Z]$/.test(key)) {
+    if (currentGuess.length < WORD_LEN) {
+      currentGuess += key;
+      renderCurrentRow();
+    }
+  }
+}
+
+document.addEventListener("keydown", (e) => {
+  if (document.querySelector(".modal-backdrop.show")) return; // ignore while a modal is open
+  const k = e.key.toUpperCase();
+  if (k === "ENTER") handleKey("ENTER");
+  else if (k === "BACKSPACE") handleKey("BACK");
+  else if (/^[A-Z]$/.test(k)) handleKey(k);
+});
+
+function renderCurrentRow() {
+  for (let c = 0; c < WORD_LEN; c++) {
+    const tile = document.getElementById(`tile-${currentRow}-${c}`);
+    const letter = currentGuess[c] || "";
+    tile.textContent = letter;
+    tile.classList.toggle("filled", !!letter);
+  }
+}
+
+/* ---------- Guess evaluation ---------- */
+
+function evaluateGuess(guess, secret) {
+  const result = new Array(WORD_LEN).fill("absent");
+  const secretArr = secret.split("");
+  const guessArr = guess.split("");
+  const used = new Array(WORD_LEN).fill(false);
+
+  // First pass: correct letters
+  for (let i = 0; i < WORD_LEN; i++) {
+    if (guessArr[i] === secretArr[i]) {
+      result[i] = "correct";
+      used[i] = true;
+    }
+  }
+  // Second pass: present letters (not already matched)
+  for (let i = 0; i < WORD_LEN; i++) {
+    if (result[i] === "correct") continue;
+    const idx = secretArr.findIndex((ch, j) => ch === guessArr[i] && !used[j]);
+    if (idx !== -1) {
+      result[i] = "present";
+      used[idx] = true;
+    }
+  }
+  return result;
+}
+
+function submitGuess() {
+  if (currentGuess.length < WORD_LEN) {
+    showToast("Not enough letters");
+    shakeRow(currentRow);
+    return;
+  }
+  if (!VALID_GUESSES.includes(currentGuess)) {
+    showToast("Not in word list");
+    shakeRow(currentRow);
+    return;
+  }
+
+  const result = evaluateGuess(currentGuess, answer);
+  guesses.push({ word: currentGuess, result });
+
+  revealRow(currentRow, currentGuess, result, () => {
+    updateKeyboardColors(currentGuess, result);
+
+    const won = result.every(r => r === "correct");
+    if (won) {
+      document.getElementById(`row-${currentRow}`).classList.add("win");
+      endGame(true);
+    } else if (currentRow === ROWS - 1) {
+      endGame(false);
+    } else {
+      currentRow++;
+      currentGuess = "";
+    }
+  });
+}
+
+function revealRow(rowIdx, word, result, callback) {
+  for (let c = 0; c < WORD_LEN; c++) {
+    const tile = document.getElementById(`tile-${rowIdx}-${c}`);
+    setTimeout(() => {
+      tile.classList.add("reveal", result[c]);
+      if (c === WORD_LEN - 1) {
+        setTimeout(callback, 350);
+      }
+    }, c * 200);
+  }
+}
+
+function shakeRow(rowIdx) {
+  const row = document.getElementById(`row-${rowIdx}`);
+  row.classList.add("shake");
+  setTimeout(() => row.classList.remove("shake"), 400);
+}
+
+function updateKeyboardColors(word, result) {
+  const priority = { absent: 0, present: 1, correct: 2 };
+  for (let i = 0; i < WORD_LEN; i++) {
+    const letter = word[i];
+    const newState = result[i];
+    const existing = keyStates[letter];
+    if (!existing || priority[newState] > priority[existing]) {
+      keyStates[letter] = newState;
+    }
+  }
+  Object.keys(keyStates).forEach(letter => {
+    const btn = document.getElementById(`key-${letter}`);
+    if (btn) {
+      btn.classList.remove("correct", "present", "absent");
+      btn.classList.add(keyStates[letter]);
+    }
+  });
+}
+
+/* ---------- Toast ---------- */
+
+let toastTimer = null;
+function showToast(msg, duration = 1400) {
+  toastEl.textContent = msg;
+  toastEl.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove("show"), duration);
+}
+
+/* ---------- Stats / localStorage ---------- */
+
+function loadStats() {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (raw) return JSON.parse(raw);
+  return { played: 0, wins: 0, streak: 0, maxStreak: 0, distribution: [0,0,0,0,0,0] };
+}
+
+function saveStats(stats) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(stats));
+}
+
+function recordResult(won, guessCount) {
+  const stats = loadStats();
+  stats.played += 1;
+  if (won) {
+    stats.wins += 1;
+    stats.streak += 1;
+    stats.maxStreak = Math.max(stats.maxStreak, stats.streak);
+    stats.distribution[guessCount - 1] += 1;
+  } else {
+    stats.streak = 0;
+  }
+  saveStats(stats);
+  return stats;
+}
+
+function renderStats() {
+  const stats = loadStats();
+  document.getElementById("statPlayed").textContent = stats.played;
+  document.getElementById("statWinPct").textContent = stats.played
+    ? Math.round((stats.wins / stats.played) * 100)
+    : 0;
+  document.getElementById("statStreak").textContent = stats.streak;
+  document.getElementById("statMaxStreak").textContent = stats.maxStreak;
+
+  const distChart = document.getElementById("distChart");
+  distChart.innerHTML = "";
+  const maxVal = Math.max(1, ...stats.distribution);
+  stats.distribution.forEach((count, i) => {
+    const row = document.createElement("div");
+    row.className = "dist-row";
+    const isCurrentWin = !gameOver ? false : (guesses.length === i + 1 && guesses.length && guesses[guesses.length-1].result.every(r=>r==="correct"));
+    row.innerHTML = `
+      <span class="dist-label">${i + 1}</span>
+      <div class="dist-bar-track">
+        <div class="dist-bar-fill ${isCurrentWin ? "won" : ""}" style="width:${(count / maxVal) * 100}%">${count > 0 ? count : ""}</div>
+      </div>`;
+    distChart.appendChild(row);
+  });
+}
+
+/* ---------- End of game ---------- */
+
+function endGame(won) {
+  gameOver = true;
+  const stats = recordResult(won, guesses.length);
+
+  setTimeout(() => {
+    document.getElementById("resultTitle").textContent = won ? pickWinPhrase() : "Out of ink";
+    document.getElementById("resultWord").textContent = answer;
+    document.getElementById("resultSub").style.display = won ? "none" : "block";
+    if (won) {
+      document.getElementById("resultSub").style.display = "block";
+      document.getElementById("resultSub").innerHTML = `Solved in <strong>${guesses.length}</strong> / ${ROWS} tries.`;
+    }
+    openModal("resultModal");
+  }, won ? 600 : 200);
+}
+
+function pickWinPhrase() {
+  const phrases = ["Inked it!", "Well written.", "Clean sweep.", "Sharp eye.", "Press confirmed."];
+  return phrases[Math.min(guesses.length - 1, phrases.length - 1)];
+}
+
+/* ---------- Modal handling ---------- */
+
+function openModal(id) {
+  document.getElementById(id).classList.add("show");
+  if (id === "statsModal") renderStats();
+}
+function closeModal(id) {
+  document.getElementById(id).classList.remove("show");
+}
+
+document.querySelectorAll("[data-close]").forEach(el => {
+  el.addEventListener("click", () => closeModal(el.dataset.close));
+});
+document.querySelectorAll(".modal-backdrop").forEach(backdrop => {
+  backdrop.addEventListener("click", (e) => {
+    if (e.target === backdrop) closeModal(backdrop.id);
+  });
+});
+
+document.getElementById("infoBtn").addEventListener("click", () => openModal("infoModal"));
+document.getElementById("statsBtn").addEventListener("click", () => openModal("statsModal"));
+document.getElementById("nextWordBtn").addEventListener("click", () => {
+  closeModal("statsModal");
+  newGame();
+});
+document.getElementById("playAgainBtn").addEventListener("click", () => {
+  closeModal("resultModal");
+  newGame();
+});
+
+/* ---------- Init ---------- */
+
+newGame();
+
+// Show how-to-play automatically on a brand new visitor's first load
+if (!localStorage.getItem("inkwell_seen_intro")) {
+  openModal("infoModal");
+  localStorage.setItem("inkwell_seen_intro", "1");
+}
+
+  </script>
+</body>
+</html>
